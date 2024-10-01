@@ -1,61 +1,92 @@
 <?php
 
-$servername = "localhost";
-$username = "root"; 
-$password = ""; 
-$dbname = "taskappdb";
+// Database connection class
+class dbconnect {
+    private $connection;
 
-$conn = new mysqli($servername, $username, $password, $dbname);
+    public function __construct($db_type, $db_host, $db_port, $db_user, $db_pass, $db_name) {
+        $this->connection($db_type, $db_host, $db_port, $db_user, $db_pass, $db_name);
+    }
 
+    public function connection($db_type, $db_host, $db_port, $db_user, $db_pass, $db_name) {
+        if ($db_port != Null) {
+            $db_host .= ":" . $db_port;
+        }
 
-if ($conn->connect_error) {
-    die("Connection failed: " . $conn->connect_error);
+        try {
+            $this->connection = new PDO("mysql:host=$db_host;dbname=$db_name", $db_user, $db_pass);
+            $this->connection->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+            echo "Connected successfully<br>";
+        } catch (PDOException $e) {
+            echo "Connection failed: " . $e->getMessage();
+            $this->connection = null; 
+        }
+    }
+
+    public function getConnection() {
+        return $this->connection;
+    }
 }
 
-$stmt = $conn->prepare("INSERT INTO users (name, email) VALUES (?, ?)");
-$stmt->bind_param("ss", $user_name, $email);
+//Database connection
+$db = new dbconnect('PDO', 'localhost', 3308, 'root', '1234', 'taskappdb');
+$conn = $db->getConnection();
 
-if ($stmt->execute()) {
-    echo "User keyed in successfully";
-} else {
-    echo "Error: " . $stmt->error;
-}
+if ($conn) { // Check if the connection was successful
 
-$stmt->close();
-$conn->close();
+    //form submission
+    if ($_SERVER["REQUEST_METHOD"] == "POST") {
 
+        // Retrieve user input from form
+        $email = $_POST['email'];
+        $user_name = $_POST['name'];
 
-$email = $_POST['email']; 
-$user_name = $_POST['name'];
+        // Insert user data into the database using prepared statements
+        $stmt = $conn->prepare("INSERT INTO users (name, email) VALUES (:name, :email)");
+        $stmt->bindParam(':name', $user_name);
+        $stmt->bindParam(':email', $email);
 
-if (filter_var($email, FILTER_VALIDATE_EMAIL)) {
-    $to = $email;
-    $subject = "Welcome to Task App!";
-    $message = "Hello " . $user_name . ", welcome to Task App!";
-    $headers = "From: no-reply@taskapp.com";
-    
-    if (mail($to, $subject, $message, $headers)) {
-        echo "Email sent $user_name!";
+        if ($stmt->execute()) {
+            echo "User inserted successfully!<br>";
+        } else {
+            echo "Error inserting user.<br>";
+        }
+
+        // Validating email
+        if (filter_var($email, FILTER_VALIDATE_EMAIL)) {
+            // Sending email
+            $to = $email;
+            $subject = "Welcome to Task App!";
+            $message = "Hello " . $user_name . ", welcome to Task App!";
+            $headers = "From: no-reply@taskapp.com";
+
+            if (mail($to, $subject, $message, $headers)) {
+                echo "Email successfully sent to $user_name!<br>";
+            } else {
+                echo "Failed to send email.<br>";
+            }
+        } else {
+            echo "Invalid email address.<br>";
+        }
+    }
+
+    // Fetch and display user list in ascending order (ID)
+    $sql = "SELECT * FROM users ORDER BY id ASC";
+    $result = $conn->query($sql);
+
+    if ($result->rowCount() > 0) {
+        $count = 1;
+        while ($row = $result->fetch(PDO::FETCH_ASSOC)) {
+            echo $count . ". " . $row['name'] . "<br>";
+            $count++;
+        }
     } else {
-        echo "Email not sent.";
+        echo "No users found.<br>";
     }
+
 } else {
-    echo "Invalid address.";
+    echo "Unable to connect to the database. Please check your connection settings.";
 }
-
-$sql = "SELECT * FROM users ORDER BY id ASC";
-$result = $conn->query($sql);
-
-if ($result->num_rows > 0) {
-    $count = 1;
-    while($row = $result->fetch_assoc()) {
-        echo $count . ". " . $row['name'] . "<br>";
-        $count++;
-    }
-} else {
-    echo "Users not found.";
-}
-
 
 ?>
 
@@ -66,4 +97,3 @@ if ($result->num_rows > 0) {
     <input type="submit" value="Sign Up">
 </form>
 </html>
-
